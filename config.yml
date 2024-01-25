@@ -4,4 +4,3 @@ database:
   user: linky
   password: mypassword
 device: /dev/ttyS0
-use_utc: True

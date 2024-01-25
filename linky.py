@@ -1,23 +1,35 @@
 #!/usr/bin/python3
+from collections import UserDict
+from contextlib import contextmanager
+from copy import deepcopy
 
 # stdlib
-import serial, MySQLdb, datetime, sys, logging, logging.handlers
-
+import MySQLdb
+import logging
+import logging.handlers
+import serial
+import sys
 # 3rd party
 import yaml
+
+LOG_PATH = './logs/linky.log'
+LOG_MAX_BYTES = 1_000_000
+LOG_BACKUP_COUNT = 5
+
+BAUD_RATE = 1200
 
 
 def init_log_system():
     """
-    Initializes log system
+    Initializes logger system
     """
-    log = logging.getLogger('linky')
-    log.setLevel(logging.DEBUG) # Define minimum severity here
-    handler = logging.handlers.RotatingFileHandler('./logs/linky.log', maxBytes=1000000, backupCount=5) # Log file of 1 MB, 5 previous files kept
-    formatter = logging.Formatter('[%(asctime)s][%(module)s][%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S %z') # Custom line format and time format to include the module and delimit all of this well
+    logger = logging.getLogger('linky')
+    logger.setLevel(logging.DEBUG)  # Define minimum severity here
+    handler = logging.handlers.RotatingFileHandler(LOG_PATH, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT)
+    formatter = logging.Formatter('[%(asctime)s][%(module)s][%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S %z')
     handler.setFormatter(formatter)
-    log.addHandler(handler)
-    return log
+    logger.addHandler(handler)
+    return logger
 
 
 def load_config():
@@ -27,9 +39,11 @@ def load_config():
     try:
         with open('config.yml', 'r') as f:
             config = yaml.safe_load(f)
-    except Exception as e:
+    except IOError:
+        log.critical('Problem reading config file: config.yml', exc_info=True)
+        raise SystemExit(1)
+    except Exception:
         log.critical('Something went wrong while opening config file:', exc_info=True)
-        print('Something went wrong while opening config file. See logs for more info.', file=sys.stderr)
         raise SystemExit(3)
     else:
         return config
@@ -44,137 +58,173 @@ def setup_serial(dev):
     """
     terminal = serial.Serial()
     terminal.port = dev
-    terminal.baudrate = 1200
+    terminal.baudrate = BAUD_RATE
     terminal.stopbits = serial.STOPBITS_ONE
     terminal.bytesize = serial.SEVENBITS
     return terminal
 
 
-def test_db_connection(server, user, password, name):
+def test_db_connection(config):
     """
     Tests DB connection, and also creates the schema if missing
 
     Args:
-        server (str): Database server
-        user (str): Database user
-        password (str): Database user password
-        name (str): Database name
+        config (dict): The configuration dictionary
     """
     # testing connection
-    db, cr = open_db(server, user, password, name)
+    required_dbs = ['stream', 'dailies']
 
-    # create schema if first connection
-    stream_exists = cr.execute(f"SELECT * FROM information_schema.tables WHERE table_schema = '{name}' AND table_name = 'stream' LIMIT 1;")
-    dailies_exists = cr.execute(f"SELECT * FROM information_schema.tables WHERE table_schema = '{name}' AND table_name = 'dailies' LIMIT 1;")
+    with db_manager(config) as (db, cr):
+        count = cr.execute(
+            f"SELECT * "
+            f"FROM information_schema.tables "
+            f"WHERE table_schema = '{config['database']['name']}' AND table_name IN ({','.join(required_dbs)})"
+        )
+        if count != len(required_dbs):
+            log.info("Database schema is not there, creating it...")
+            try:
+                with open('schema.sql', 'r') as f:
+                    cr.execute(f.read())
+                db.commit()
+            except MySQLdb.OperationalError:
+                log.critical('Something went wrong while trying to create database schema:', exc_info=True)
+                print('Something went wrong while trying to create database schema. See logs for more info.',
+                      file=sys.stderr)
+                raise SystemExit(4)
+            else:
+                log.info("Database schema created successfully")
 
-    if stream_exists == 0 or dailies_exists == 0:
-        log.info("Database schema is not there, creating it...")
-        try:
-            cr.execute("CREATE TABLE `dailies` (`id` int(10) UNSIGNED NOT NULL,`clock` date NOT NULL,`BASE_diff` int(11) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;")
-            cr.execute("CREATE TABLE `stream` (`id` int(20) UNSIGNED NOT NULL,`clock` datetime NOT NULL,`BASE` int(11) NOT NULL,`PAPP` int(11) NOT NULL,`BASE_diff` int(11) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;")
-            cr.execute("ALTER TABLE `dailies` ADD PRIMARY KEY (`id`), ADD KEY `clock` (`clock`);")
-            cr.execute("ALTER TABLE `stream` ADD PRIMARY KEY (`id`), ADD KEY `clock` (`clock`);")
-            cr.execute("ALTER TABLE `dailies` MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;")
-            cr.execute("ALTER TABLE `stream` MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;")
-            db.commit()
-        except MySQLdb._exceptions.OperationalError:
-            log.critical('Something went wrong while trying to create database schema:', exc_info=True)
-            print('Something went wrong while trying to create database schema. See logs for more info.', file=sys.stderr)
-            raise SystemExit(4)
-        else:
-            log.info("Database schema created successfully")
 
-
-def open_db(server, user, password, name):
-    """
-    Connects to database
-
-    Args:
-        server (str): Database server
-        user (str): Database user
-        password (str): Database user password
-        name (str): Database name
-    """
+@contextmanager
+def db_manager(config):
     try:
-        db = MySQLdb.connect(server, user, password, name)
+        db = MySQLdb.connect(config['database']['server'],
+                             config['database']['user'],
+                             config['database']['password'],
+                             config['database']['name'])
         cr = db.cursor()
-        return db, cr
-    except MySQLdb._exceptions.OperationalError:
+    except MySQLdb.Error:
         log.critical('Something went wrong while connecting to database server:', exc_info=True)
         print('Something went wrong while connecting to database server. See logs for more info.', file=sys.stderr)
-        raise SystemExit(4)
+        raise SystemExit(5)
+    try:
+        yield db, cr
+    finally:
+        db.close()
 
 
-def close_db(db):
-    """
-    Closes connection to database
-
-    Args:
-        db (type): MySQLdb database object
-    """
-    db.close()
-
-
-def insert_stream(config, db, cr, BASE, PAPP):
+def insert_stream(config, stream):
     """
     Insert a record in the stream table
 
     Args:
         config (dict): Loaded config from yaml file
-        db (type): MySQLdb database object
-        cr (type): MySQLdb cursor object
-        BASE (int): Linky BASE value (Wh meter)
-        PAPP (int): Linky PAPP value (current VA power)
+        stream (dict): MySQLdb database object
     """
-    # generating time
-    if config.get('use_utc', False):
-        now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-    else:
-        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with db_manager(config) as (db, cr):
+        log.debug("Inserting stream record")
+        cr.execute(f"INSERT INTO streams ({','.join(stream.keys())}) VALUES ({','.join(stream.values())})")
+        db.commit()
 
-    # retrieving previous BASE and calculating BASE_diff
-    cr.execute("SELECT BASE FROM stream ORDER BY clock DESC LIMIT 1;")
+
+@contextmanager
+def open_terminal(terminal):
+    terminal.open()
     try:
-        previous = cr.fetchone()[0]
-    except TypeError:
-        # no records yet
-        BASE_diff = 0
-    else:
-        BASE_diff = BASE-int(previous)
-
-    # inserting records
-    cr.execute(f'INSERT INTO stream VALUES (NULL, %(now)s, %(BASE)s, %(PAPP)s, %(BASE_diff)s);', {"now": now, "BASE": BASE, "PAPP": PAPP, "BASE_diff": BASE_diff})
-    db.commit()
+        yield terminal
+    except Exception:
+        log.critical("Something went wrong while reading from serial:", exc_info=True)
+        raise
+    finally:
+        terminal.close()
 
 
-def insert_dailies(config, db, cr, BASE):
-    """
-    Inserts a record in the dailies table
+class LinkyMetrics(UserDict):
 
-    Args:
-        config (dict): Loaded config from yaml file
-        db (type): MySQLdb database object
-        cr (type): MySQLdb cursor object
-        BASE (int): Linky BASE value (Wh meter)
-    """
-    # getting previous day midnight BASE value
-    cr.execute("SELECT clock, BASE from `stream` INNER JOIN (SELECT MIN(clock) AS firstOfTheDay FROM `stream` GROUP BY DATE(clock)) joint ON `stream`.clock = joint.firstOfTheDay ORDER BY `stream`.clock DESC LIMIT 1;")
-    try:
-        previous = cr.fetchone()[1]
-    except TypeError:
-        # no records yet
-        diff = 0
-    else:
-        diff = BASE-previous
-    
-    if config.get('use_utc', False):
-        now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')
-    else:
-        now = datetime.datetime.now().strftime('%Y-%m-%d')
+    DEFAULT_DATA = {
+        'ADCO': None,  # Adresse du compteur
+        'OPTARIF': None,  # Option tarifaire choisie
+        'ISOUSC': None,  # Intensité souscrite (A)
+        'BASE': None,  # Index option Base (Wh)
+        'HCHC': None,  # Index option HC Heures Creuses (Wh)
+        'HCHP': None,  # Index option HC Heures Pleines (Wh)
+        'EJPHN': None,  # Index option EJP Heures Normales (Wh)
+        'EJPHPM': None,  # Index option EJP Heures de Pointe Mobile (Wh)
+        'BBRHCJB': None,  # Index option Tempo jours Bleus Heures Creuses (Wh)
+        'BBRHPJB': None,  # Index option Tempo jours Bleus Heures Pleines (Wh)
+        'BBRHCJW': None,  # Index option Tempo jours Blancs Heures Creuses (Wh)
+        'BBRHPJW': None,  # Index option Tempo jours Blancs Heures Pleines (Wh)
+        'BBRHCJR': None,  # Index option Tempo jours Rouges Heures Creuses (Wh)
+        'BBRHPJR': None,  # Index option Tempo jours Rouges Heures Pleines (Wh)
+        'PEJP': None,  # Préavis Début EJP (min)
+        'PTEC': None,  # Période Tarifaire en cours
+        'DEMAIN': None,  # Couleur du lendemain
+        'IINST': None,  # Intensité Instantanée (A)
+        'ADPS': None,  # Avertissement de Dépassement De Puissance Souscrite (A)
+        'IMAX': None,  # Intensité maximale appelée (A)
+        'PAPP': None,  # Puissance apparente (VA)
+        'HHPHC': None,  # Horaire Heures Pleines Heures Creuses
+        'MOTDETAT': None,  # Mot d'état du compteur
+    }
 
-    cr.execute(f'INSERT INTO dailies VALUES (NULL, %(now)s, %(diff)s)', {"now": now, "diff": diff})
-    db.commit()
+    REQUIRED_DATA = ['ADCO', 'OPTARIF', 'ISOUSC', 'IINST', 'IMAX', 'PAPP', 'MOTDETAT']
+
+    def reset(self):
+        self.data = deepcopy(self.DEFAULT_DATA)
+
+    def flush(self):
+        self.write_to_db()
+        self.reset()
+
+    def write_to_db(self):
+        if not all([self.data.get(k) for k in self.REQUIRED_DATA]):
+            log.warning("Not enough data to write to db")
+            return
+
+        with db_manager(config) as (db, cr):
+            log.debug("Inserting stream record")
+            cr.execute(f"INSERT INTO streams ({','.join(self.data.keys())}) VALUES ({','.join(self.data.values())})")
+            db.commit()
+
+
+class LinkyReader(object):
+
+    def __init__(self, device='/dev/ttyS0'):
+        self.terminal = setup_serial(device)
+        self.data = LinkyMetrics()
+        self.log = logging.getLogger('linky')
+
+    def get_line(self):
+        line = self.terminal.readline().decode('ascii').strip()
+        self.log.debug(f"Current line: '{line}'")
+        return line
+
+    def parse_line(self, line):
+        code, value, _ = line.split(' ', 2)
+        self.log.debug(f"Parsed: {code}={value}")
+        return code, value
+
+    def get_parsed_line(self):
+        return self.parse_line(self.get_line())
+
+    def read_data_group(self):
+        with open_terminal(self.terminal):
+            code, value = self.get_parsed_line()
+
+            while code.upper() != 'ADCO':  # first word
+                code, value = self.get_parsed_line()
+
+            lv = LinkyMetrics({code: value})
+            while code.upper() != 'MOTDETAT':  # last word
+                code, value = self.get_parsed_line()
+                lv[code] = value
+
+            lv.flush()
 
 
 # Initializing log system
 log = init_log_system()
+
+log.debug('Loading config...')
+config = load_config()
+log.debug(f'Config loaded! Values: {config}')
