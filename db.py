@@ -50,7 +50,7 @@ def connect(config: dict) -> tuple[MySQLdb.Connection, object]:
                              config['database']['user'],
                              config['database']['password'],
                              config['database']['name'])
-        cr = db.cursor(prepared=True)
+        cr = db.cursor()
     except MySQLdb.Error:
         log.critical('Something went wrong while connecting to database server:', exc_info=True)
         print('Something went wrong while connecting to database server. See logs for more info.', file=sys.stderr)
