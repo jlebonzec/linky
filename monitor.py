@@ -76,10 +76,12 @@ class LinkyReader(object):
 
     def parse_line(self, line: str) -> tuple[str, str]:
         """ Parse a line already read from the serial connection """
-        try:
-            code, value, _ = line.split(' ', 2)
-        except ValueError:
-            code, value = line.split(' ', 1)
+        words = line.split()
+        if len(words) < 2:
+            log.debug(f"Line '{line}' is not valid")
+            return "", ""
+
+        code, value = words[:2]
         log.debug(f"Parsed: {code}={value}")
         return code, value
 
