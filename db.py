@@ -20,7 +20,7 @@ def verify_connection(config: dict):
         count = cr.execute(
             f"SELECT * "
             f"FROM information_schema.tables "
-            f"WHERE table_schema = 'config['database']['name']' AND table_name IN ({','.join(['%s' for s in required_dbs])})",
+            f"WHERE table_schema = '{config['database']['name']}' AND table_name IN ({','.join(['%s' for s in required_dbs])})",
             tuple(required_dbs)
         )
         if count != len(required_dbs):
