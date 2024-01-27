@@ -18,9 +18,12 @@ def verify_connection(config: dict):
 
     with connect(config) as (db, cr):
         count = cr.execute(
-            f"SELECT * "
-            f"FROM information_schema.tables "
-            f"WHERE table_schema = '{config['database']['name']}' AND table_name IN ({','.join(required_dbs)})"
+            "SELECT * "
+            "FROM information_schema.tables "
+            "WHERE table_schema = '{name}' AND table_name IN ({tables})".format(
+                name=config['database']['name'],
+                tables=','.join([f"'{t}'" for t in required_dbs])
+            )
         )
         if count != len(required_dbs):
             log.info("Database schema is not there, creating it...")
