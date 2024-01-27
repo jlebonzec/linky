@@ -55,7 +55,7 @@ class LinkyMetrics(UserDict):
         with connect(config) as (db, cr):
             log.debug("Inserting stream record")
             cr.execute(
-                f"INSERT INTO streams ({','.join(self.data.keys())}) VALUES ({','.join(['%s' for s in self.data.values()])})",
+                f"INSERT INTO stream ({','.join(self.data.keys())}) VALUES ({','.join(['%s' for s in self.data.values()])})",
                 tuple(self.data.values())
             )
             db.commit()
