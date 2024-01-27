@@ -23,19 +23,21 @@ def verify_connection(config: dict):
             f"WHERE table_schema = '{config['database']['name']}' AND table_name IN ({','.join(['%s' for s in required_dbs])})",
             tuple(required_dbs)
         )
-        if count != len(required_dbs):
-            log.info("Database schema is not there, creating it...")
-            try:
-                with open('schema.sql', 'r') as f:
+
+    if count != len(required_dbs):
+        log.info("Database schema is not there, creating it...")
+        try:
+            with open('schema.sql', 'r') as f:
+                with connect(config) as (db, cr):
                     cr.execute(f.read())
-                db.commit()
-            except MySQLdb.OperationalError:
-                log.critical('Something went wrong while trying to create database schema:', exc_info=True)
-                print('Something went wrong while trying to create database schema. See logs for more info.',
-                      file=sys.stderr)
-                raise SystemExit(4)
-            else:
-                log.info("Database schema created successfully")
+                    db.commit()
+        except MySQLdb.OperationalError:
+            log.critical('Something went wrong while trying to create database schema:', exc_info=True)
+            print('Something went wrong while trying to create database schema. See logs for more info.',
+                  file=sys.stderr)
+            raise SystemExit(4)
+        else:
+            log.info("Database schema created successfully")
 
 
 @contextmanager
