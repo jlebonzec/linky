@@ -18,12 +18,10 @@ def verify_connection(config: dict):
 
     with connect(config) as (db, cr):
         count = cr.execute(
-            "SELECT * "
-            "FROM information_schema.tables "
-            "WHERE table_schema = '{name}' AND table_name IN ({tables})".format(
-                name=config['database']['name'],
-                tables=','.join([f"'{t}'" for t in required_dbs])
-            )
+            f"SELECT * "
+            f"FROM information_schema.tables "
+            f"WHERE table_schema = 'config['database']['name']' AND table_name IN ({','.join(['%s' for s in required_dbs])})",
+            tuple(required_dbs)
         )
         if count != len(required_dbs):
             log.info("Database schema is not there, creating it...")
@@ -52,7 +50,7 @@ def connect(config: dict) -> tuple[MySQLdb.Connection, object]:
                              config['database']['user'],
                              config['database']['password'],
                              config['database']['name'])
-        cr = db.cursor()
+        cr = db.cursor(prepared=True)
     except MySQLdb.Error:
         log.critical('Something went wrong while connecting to database server:', exc_info=True)
         print('Something went wrong while connecting to database server. See logs for more info.', file=sys.stderr)
