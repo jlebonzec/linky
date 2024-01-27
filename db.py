@@ -38,7 +38,7 @@ def verify_connection(config: dict):
 
 
 @contextmanager
-def connect(config: dict) -> tuple[MySQLdb.Connection, MySQLdb.cursors.Cursor]:
+def connect(config: dict) -> tuple[MySQLdb.Connection, object]:
     """
     Context manager to connect to the database
 
