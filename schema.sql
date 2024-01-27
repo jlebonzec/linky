@@ -77,20 +77,19 @@ CREATE OR REPLACE VIEW contract AS
     ORDER BY id DESC LIMIT 1;
 
 CREATE TRIGGER compute_stream_delta BEFORE INSERT ON stream
-    FOR EACH ROW SET NEW.BASE_delta = NEW.BASE - IFNULL((SELECT BASE FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.HCHC_delta = NEW.HCHC - IFNULL((SELECT HCHC FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.HCHP_delta = NEW.HCHP - IFNULL((SELECT HCHP FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.EJPHN_delta = NEW.EJPHN - IFNULL((SELECT EJPHN FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.EJPHPM_delta = NEW.EJPHPM - IFNULL((SELECT EJPHPM FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.BBRHCJB_delta = NEW.BBRHCJB - IFNULL((SELECT BBRHCJB FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.BBRHPJB_delta = NEW.BBRHPJB - IFNULL((SELECT BBRHPJB FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.BBRHCJW_delta = NEW.BBRHCJW - IFNULL((SELECT BBRHCJW FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.BBRHPJW_delta = NEW.BBRHPJW - IFNULL((SELECT BBRHPJW FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.BBRHCJR_delta = NEW.BBRHCJR - IFNULL((SELECT BBRHCJR FROM stream ORDER BY id DESC LIMIT 1), 0),
-                     NEW.BBRHPJR_delta = NEW.BBRHPJR - IFNULL((SELECT BBRHPJR FROM stream ORDER BY id DESC LIMIT 1), 0);
+    FOR EACH ROW SET NEW.BASE_delta = IFNULL(NEW.BASE - (SELECT BASE FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.HCHC_delta = IFNULL(NEW.HCHC - (SELECT HCHC FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.HCHP_delta = IFNULL(NEW.HCHP - (SELECT HCHP FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.EJPHN_delta = IFNULL(NEW.EJPHN - (SELECT EJPHN FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.EJPHPM_delta = IFNULL(NEW.EJPHPM - (SELECT EJPHPM FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHCJB_delta = IFNULL(NEW.BBRHCJB - (SELECT BBRHCJB FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHPJB_delta = IFNULL(NEW.BBRHPJB - (SELECT BBRHPJB FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHCJW_delta = IFNULL(NEW.BBRHCJW - (SELECT BBRHCJW FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHPJW_delta = IFNULL(NEW.BBRHPJW - (SELECT BBRHPJW FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHCJR_delta = IFNULL(NEW.BBRHCJR - (SELECT BBRHCJR FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHPJR_delta = IFNULL(NEW.BBRHPJR - (SELECT BBRHPJR FROM stream ORDER BY id DESC LIMIT 1), 0);
 
 
-delimiter |
 CREATE EVENT IF NOT EXISTS daily_delta
     ON SCHEDULE
         -- start at midnight every day
@@ -99,29 +98,26 @@ CREATE EVENT IF NOT EXISTS daily_delta
     ON COMPLETION PRESERVE
     COMMENT "Calculate daily energy consumption"
     DO
-        BEGIN
-            INSERT INTO dailies (BASE_delta, HCHC_delta, HCHP_delta, EJPHN_delta, EJPHPM_delta, BBRHCJB_delta, BBRHPJB_delta, BBRHCJW_delta, BBRHPJW_delta, BBRHCJR_delta, BBRHPJR_delta)
-                SELECT last.BASE-first.BASE,
-                       last.HCHC-first.HCHC,
-                       last.HCHP-first.HCHP,
-                       last.EJPHN-first.EJPHN,
-                       last.EJPHPM-first.EJPHPM,
-                       last.BBRHCJB-first.BBRHCJB,
-                       last.BBRHPJB-first.BBRHPJB,
-                       last.BBRHCJW-first.BBRHCJW,
-                       last.BBRHPJW-first.BBRHPJW,
-                       last.BBRHCJR-first.BBRHCJR,
-                       last.BBRHPJR-first.BBRHPJR
-                FROM (
-                    SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
-                    FROM stream
-                    WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
-                    ORDER BY id LIMIT 1
-                ) as first, (
-                    SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
-                    FROM stream
-                    WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
-                    ORDER BY id DESC LIMIT 1
-                ) as last;
-        END|
-delimiter ;
+        INSERT INTO dailies (BASE_delta, HCHC_delta, HCHP_delta, EJPHN_delta, EJPHPM_delta, BBRHCJB_delta, BBRHPJB_delta, BBRHCJW_delta, BBRHPJW_delta, BBRHCJR_delta, BBRHPJR_delta)
+            SELECT last.BASE-first.BASE,
+                   last.HCHC-first.HCHC,
+                   last.HCHP-first.HCHP,
+                   last.EJPHN-first.EJPHN,
+                   last.EJPHPM-first.EJPHPM,
+                   last.BBRHCJB-first.BBRHCJB,
+                   last.BBRHPJB-first.BBRHPJB,
+                   last.BBRHCJW-first.BBRHCJW,
+                   last.BBRHPJW-first.BBRHPJW,
+                   last.BBRHCJR-first.BBRHCJR,
+                   last.BBRHPJR-first.BBRHPJR
+            FROM (
+                SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
+                FROM stream
+                WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
+                ORDER BY id LIMIT 1
+            ) as first, (
+                SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
+                FROM stream
+                WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
+                ORDER BY id DESC LIMIT 1
+            ) as last;
