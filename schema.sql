@@ -77,17 +77,17 @@ CREATE OR REPLACE VIEW contract AS
     ORDER BY id DESC LIMIT 1;
 
 CREATE TRIGGER compute_stream_delta BEFORE INSERT ON stream
-    FOR EACH ROW SET NEW.BASE_delta = NEW.BASE - (SELECT BASE FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.HCHC_delta = NEW.HCHC - (SELECT HCHC FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.HCHP_delta = NEW.HCHP - (SELECT HCHP FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.EJPHN_delta = NEW.EJPHN - (SELECT EJPHN FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.EJPHPM_delta = NEW.EJPHPM - (SELECT EJPHPM FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.BBRHCJB_delta = NEW.BBRHCJB - (SELECT BBRHCJB FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.BBRHPJB_delta = NEW.BBRHPJB - (SELECT BBRHPJB FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.BBRHCJW_delta = NEW.BBRHCJW - (SELECT BBRHCJW FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.BBRHPJW_delta = NEW.BBRHPJW - (SELECT BBRHPJW FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.BBRHCJR_delta = NEW.BBRHCJR - (SELECT BBRHCJR FROM stream ORDER BY id DESC LIMIT 1),
-                     NEW.BBRHPJR_delta = NEW.BBRHPJR - (SELECT BBRHPJR FROM stream ORDER BY id DESC LIMIT 1);
+    FOR EACH ROW SET NEW.BASE_delta = NEW.BASE - IFNULL((SELECT BASE FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.HCHC_delta = NEW.HCHC - IFNULL((SELECT HCHC FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.HCHP_delta = NEW.HCHP - IFNULL((SELECT HCHP FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.EJPHN_delta = NEW.EJPHN - IFNULL((SELECT EJPHN FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.EJPHPM_delta = NEW.EJPHPM - IFNULL((SELECT EJPHPM FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHCJB_delta = NEW.BBRHCJB - IFNULL((SELECT BBRHCJB FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHPJB_delta = NEW.BBRHPJB - IFNULL((SELECT BBRHPJB FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHCJW_delta = NEW.BBRHCJW - IFNULL((SELECT BBRHCJW FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHPJW_delta = NEW.BBRHPJW - IFNULL((SELECT BBRHPJW FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHCJR_delta = NEW.BBRHCJR - IFNULL((SELECT BBRHCJR FROM stream ORDER BY id DESC LIMIT 1), 0),
+                     NEW.BBRHPJR_delta = NEW.BBRHPJR - IFNULL((SELECT BBRHPJR FROM stream ORDER BY id DESC LIMIT 1), 0);
 
 
 delimiter |
