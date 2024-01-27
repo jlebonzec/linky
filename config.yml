@@ -4,3 +4,4 @@ database:
   user: linky
   password: mypassword
 device: /dev/ttyS0
+loop_delay_seconds: 60
