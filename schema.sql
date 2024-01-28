@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS `dailies`  -- READ-ONLY table, do not INSERT/UPDATE/DELETE besides automation
 (
     `id`        INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
-    `clock`     DATE DEFAULT (CURRENT_DATE),
+    `time`     DATE DEFAULT (CURRENT_DATE),
     `BASE_delta` INT(11) NOT NULL DEFAULT 0,
     `HCHC_delta` INT(11) NOT NULL DEFAULT 0,
     `HCHP_delta` INT(11) NOT NULL DEFAULT 0,
@@ -15,13 +15,13 @@ CREATE TABLE IF NOT EXISTS `dailies`  -- READ-ONLY table, do not INSERT/UPDATE/D
     `BBRHPJR_delta` INT(11) NOT NULL DEFAULT 0,
 
     PRIMARY KEY (id),
-    KEY `clock` (`clock`)
+    KEY `time` (`time`)
 )
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `stream` (
     `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
-    `clock` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `time` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `ADCO` VARCHAR(12) NOT NULL DEFAULT '',
     `OPTARIF` VARCHAR(4) DEFAULT NULL,
     `ISOUSC` TINYINT(1) NOT NULL DEFAULT 0,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS `stream` (
     `MOTDETAT` VARCHAR(6) DEFAULT NULL,
 
     PRIMARY KEY (id),
-    KEY `clock` (`clock`)
+    KEY `time` (`time`)
 )
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -107,12 +107,12 @@ CREATE PROCEDURE IF NOT EXISTS generate_delta()
     FROM (
         SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
         FROM stream
-        WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
+        WHERE `time` >= NOW() - INTERVAL 1 DAY and `time` < NOW()
         ORDER BY id LIMIT 1
     ) as first, (
         SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
         FROM stream
-        WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
+        WHERE `time` >= NOW() - INTERVAL 1 DAY and `time` < NOW()
         ORDER BY id DESC LIMIT 1
     ) as last;
 

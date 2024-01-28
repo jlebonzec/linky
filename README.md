@@ -48,7 +48,7 @@ Si vous avez bien tout installé, vous devriez commencer à voir des lignes (une
 ```
 MariaDB [linky]> select * from stream;
 +---------------------+---------+------+------------+
-| clock               | BASE    | PAPP | BASE_delta |
+| time               | BASE    | PAPP | BASE_delta |
 +---------------------+---------+------+------------+
 | 2022-07-14 17:02:55 | 2086442 |   70 |          0 |
 | 2022-07-14 17:03:57 | 2086443 |   70 |          1 |
