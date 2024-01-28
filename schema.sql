@@ -90,34 +90,37 @@ CREATE TRIGGER compute_stream_delta BEFORE INSERT ON stream
                      NEW.BBRHPJR_delta = IFNULL(NEW.BBRHPJR - (SELECT BBRHPJR FROM stream ORDER BY id DESC LIMIT 1), 0);
 
 
+CREATE PROCEDURE IF NOT EXISTS generate_delta()
+    COMMENT "Calculate daily energy consumption"
+    INSERT INTO dailies (BASE_delta, HCHC_delta, HCHP_delta, EJPHN_delta, EJPHPM_delta, BBRHCJB_delta, BBRHPJB_delta, BBRHCJW_delta, BBRHPJW_delta, BBRHCJR_delta, BBRHPJR_delta)
+    SELECT last.BASE - first.BASE,
+           last.HCHC - first.HCHC,
+           last.HCHP - first.HCHP,
+           last.EJPHN - first.EJPHN,
+           last.EJPHPM - first.EJPHPM,
+           last.BBRHCJB - first.BBRHCJB,
+           last.BBRHPJB - first.BBRHPJB,
+           last.BBRHCJW - first.BBRHCJW,
+           last.BBRHPJW - first.BBRHPJW,
+           last.BBRHCJR - first.BBRHCJR,
+           last.BBRHPJR - first.BBRHPJR
+    FROM (
+        SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
+        FROM stream
+        WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
+        ORDER BY id LIMIT 1
+    ) as first, (
+        SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
+        FROM stream
+        WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
+        ORDER BY id DESC LIMIT 1
+    ) as last;
+
 CREATE EVENT IF NOT EXISTS daily_delta
     ON SCHEDULE
         -- start at midnight every day
         EVERY 1 DAY
         STARTS CURRENT_DATE + INTERVAL 1 DAY
     ON COMPLETION PRESERVE
-    COMMENT "Calculate daily energy consumption"
     DO
-        INSERT INTO dailies (BASE_delta, HCHC_delta, HCHP_delta, EJPHN_delta, EJPHPM_delta, BBRHCJB_delta, BBRHPJB_delta, BBRHCJW_delta, BBRHPJW_delta, BBRHCJR_delta, BBRHPJR_delta)
-            SELECT last.BASE-first.BASE,
-                   last.HCHC-first.HCHC,
-                   last.HCHP-first.HCHP,
-                   last.EJPHN-first.EJPHN,
-                   last.EJPHPM-first.EJPHPM,
-                   last.BBRHCJB-first.BBRHCJB,
-                   last.BBRHPJB-first.BBRHPJB,
-                   last.BBRHCJW-first.BBRHCJW,
-                   last.BBRHPJW-first.BBRHPJW,
-                   last.BBRHCJR-first.BBRHCJR,
-                   last.BBRHPJR-first.BBRHPJR
-            FROM (
-                SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
-                FROM stream
-                WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
-                ORDER BY id LIMIT 1
-            ) as first, (
-                SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
-                FROM stream
-                WHERE `clock` >= NOW() - INTERVAL 1 DAY and `clock` < NOW()
-                ORDER BY id DESC LIMIT 1
-            ) as last;
+        CALL generate_delta();
