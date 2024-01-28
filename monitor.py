@@ -4,7 +4,7 @@ from copy import deepcopy
 import linky
 from config import config
 from logger import log
-from db import connect
+import db
 
 
 class LinkyMetrics(UserDict):
@@ -52,13 +52,12 @@ class LinkyMetrics(UserDict):
             log.warning("Not enough data to write to db")
             return
 
-        with connect(config) as (db, cr):
+        with db.commit(config) as cr:
             log.debug("Inserting stream record")
             cr.execute(
                 f"INSERT INTO stream ({','.join(self.data.keys())}) VALUES ({','.join(['%s' for s in self.data.values()])})",
                 tuple(self.data.values())
             )
-            db.commit()
 
 
 class LinkyReader(object):

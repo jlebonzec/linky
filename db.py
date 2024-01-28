@@ -28,9 +28,11 @@ def verify_connection(config: dict):
         log.info("Database schema is not there, creating it...")
         try:
             with open('schema.sql', 'r') as f:
-                with connect(config) as (db, cr):
-                    cr.execute(f.read())
-                    db.commit()
+                for stmt in f.read().split(';'):
+                    if not stmt.strip():
+                        continue
+                    with commit(config) as cr:
+                        cr.execute(stmt)
         except MySQLdb.OperationalError:
             log.critical('Something went wrong while trying to create database schema:', exc_info=True)
             print('Something went wrong while trying to create database schema. See logs for more info.',
@@ -61,3 +63,20 @@ def connect(config: dict) -> tuple[MySQLdb.Connection, object]:
         yield db, cr
     finally:
         db.close()
+
+
+@contextmanager
+def commit(config: dict) -> object:
+    """
+    Context manager to commit changes to the database
+
+    :param config: The configuration dictionary
+    """
+    with connect(config) as (db, cr):
+        try:
+            yield cr
+            db.commit()
+        except MySQLdb.Error:
+            log.critical('Something went wrong while committing to database:', exc_info=True)
+            print('Something went wrong while committing to database. See logs for more info.', file=sys.stderr)
+            raise
