@@ -47,14 +47,16 @@ Si vous avez bien tout installé, vous devriez commencer à voir des lignes (une
 
 ```
 MariaDB [linky]> select * from stream;
-+---------------------+---------+------+-----------+
-| clock               | BASE    | PAPP | BASE_diff |
-+---------------------+---------+------+-----------+
-| 2022-07-14 17:02:55 | 2086442 |   70 |         0 |
-| 2022-07-14 17:03:57 | 2086443 |   70 |         1 |
-| 2022-07-14 17:04:58 | 2086443 |   70 |         0 |
-+---------------------+---------+------+-----------+
-4 rows in set (0.002 sec)
++---------------------+---------+------+------------+
+| clock               | BASE    | PAPP | BASE_delta |
++---------------------+---------+------+------------+
+| 2022-07-14 17:02:55 | 2086442 |   70 |          0 |
+| 2022-07-14 17:03:57 | 2086443 |   70 |          1 |
+| 2022-07-14 17:04:58 | 2086443 |   70 |          0 |
++---------------------+---------+------+------------+
+3 rows in set (0.002 sec)
 ```
+
+L'exemple ci-dessus est tronqué pour simplifier la lecture, vous devriez voir plus de colonnes.
 
 Sinon, regardez les logs du script (`logs`) ou du service (`journalctl -u linky`)
