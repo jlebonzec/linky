@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS `dailies`  -- READ-ONLY table, do not INSERT/UPDATE/DELETE besides automation
 (
     `id`        INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
-    `time`     DATE DEFAULT (CURRENT_DATE),
+    `time`     DATE DEFAULT (CURRENT_DATE - INTERVAL 1 DAY),
     `BASE_delta` INT(11) NOT NULL DEFAULT 0,
     `HCHC_delta` INT(11) NOT NULL DEFAULT 0,
     `HCHP_delta` INT(11) NOT NULL DEFAULT 0,
@@ -90,10 +90,12 @@ CREATE TRIGGER compute_stream_delta BEFORE INSERT ON stream
                      NEW.BBRHPJR_delta = IFNULL(NEW.BBRHPJR - (SELECT BBRHPJR FROM stream ORDER BY id DESC LIMIT 1), 0);
 
 
-CREATE PROCEDURE IF NOT EXISTS generate_delta()
+CREATE PROCEDURE IF NOT EXISTS generate_delta(IN dt DATE)
     COMMENT "Calculate daily energy consumption"
-    INSERT INTO dailies (BASE_delta, HCHC_delta, HCHP_delta, EJPHN_delta, EJPHPM_delta, BBRHCJB_delta, BBRHPJB_delta, BBRHCJW_delta, BBRHPJW_delta, BBRHCJR_delta, BBRHPJR_delta)
-    SELECT last.BASE - first.BASE,
+    INSERT INTO dailies (time, BASE_delta, HCHC_delta, HCHP_delta, EJPHN_delta, EJPHPM_delta, BBRHCJB_delta, BBRHPJB_delta, BBRHCJW_delta, BBRHPJW_delta, BBRHCJR_delta, BBRHPJR_delta)
+    SELECT
+           DATE(dt),
+           last.BASE - first.BASE,
            last.HCHC - first.HCHC,
            last.HCHP - first.HCHP,
            last.EJPHN - first.EJPHN,
@@ -107,20 +109,20 @@ CREATE PROCEDURE IF NOT EXISTS generate_delta()
     FROM (
         SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
         FROM stream
-        WHERE `time` >= NOW() - INTERVAL 1 DAY and `time` < NOW()
+        WHERE `time` >= DATE(dt) and `time` < DATE(dt) + INTERVAL 1 DAY
         ORDER BY id LIMIT 1
     ) as first, (
         SELECT BASE, HCHC, HCHP, EJPHN, EJPHPM, BBRHCJB, BBRHPJB, BBRHCJW, BBRHPJW, BBRHCJR, BBRHPJR
         FROM stream
-        WHERE `time` >= NOW() - INTERVAL 1 DAY and `time` < NOW()
+        WHERE `time` >= DATE(dt) and `time` < DATE(dt) + INTERVAL 1 DAY
         ORDER BY id DESC LIMIT 1
     ) as last;
 
 CREATE EVENT IF NOT EXISTS daily_delta
     ON SCHEDULE
-        -- start at midnight every day
+        -- start at 2am every day
         EVERY 1 DAY
-        STARTS CURRENT_DATE + INTERVAL 1 DAY
+        STARTS CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 2 HOUR
     ON COMPLETION PRESERVE
     DO
-        CALL generate_delta();
+        CALL generate_delta(NOW() - INTERVAL 1 DAY);
